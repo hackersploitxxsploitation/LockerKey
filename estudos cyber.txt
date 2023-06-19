@@ -1,0 +1,41 @@
+Quem sou eu:Entusiasta da segurança da informaçao 
+Criaçao de Ransoware :
+Teoria :o que e um ransoware --> virus qu criptografa e sequestra seus arquivos
+2 tipos cifra simetrica  e  chave publica
+
+
+cifra simetirica  :f(ciphertex,key)=outciperthext  ao terminar descartar as chave
+
+
+onde f é noss funçao a  inversa de f(outcipertext,key)=ciphertext
+
+chave publica:f(pk,ciphertex)=outciphertext
+a funçao f nao e facilmente invertivel e a funçao alçapao
+descriptografar f(sk,ciphertex)=outcipertext
+
+na criptografia assimetrica  so e possivel  recuperar os arquivo possuindo a chave privada
+
+Processo de contruçao:
+Abra o arquivo
+Leia o conteudo
+criptografe o conteudo
+substitua  o arquivo com o conteudo criptografado
+
+
+
+Liste os arquivos a partir de diretorio:
+
+A funçao recursiva nos dara os arquivos em cada diretorio
+apois isso aplique a funçao de criptografia nos arquvos
+
+
+
+Faça Bypass UAC:Engane o usuario com uma mensagem falsa para forneciemtno de um token elevado
+ou vasculhe por possveis exploits  no sistema
+
+
+
+Enumerar compartilhamentos de Redes:enumere recursos compartilhados na rede
+
+
+tentar se propagar para outros host:
